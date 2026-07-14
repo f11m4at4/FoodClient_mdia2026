@@ -1,0 +1,20 @@
+{
+  "name": "foodclient-local",
+  "interface": {
+    "displayName": "FoodClient Local"
+  },
+  "plugins": [
+    {
+      "name": "mwdat-android",
+      "source": {
+        "source": "local",
+        "path": "./plugins/mwdat-android"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

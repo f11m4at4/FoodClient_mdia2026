@@ -1,0 +1,124 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import java.util.Properties
+import kotlin.io.path.div
+import kotlin.io.path.exists
+import kotlin.io.path.inputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+val localProperties =
+    Properties().apply {
+      val localPropertiesPath = rootDir.toPath() / "local.properties"
+      if (localPropertiesPath.exists()) {
+        load(localPropertiesPath.inputStream())
+      }
+    }
+
+val analysisServerUrl: String =
+    providers.gradleProperty("analysisServerUrl").orNull
+        ?: localProperties.getProperty("analysis_server_url")
+        ?: ""
+
+fun String.asBuildConfigString(): String =
+    buildString {
+      append('"')
+      this@asBuildConfigString.forEach { character ->
+        when (character) {
+          '\\' -> append("\\\\")
+          '"' -> append("\\\"")
+          '\n' -> append("\\n")
+          '\r' -> append("\\r")
+          '\t' -> append("\\t")
+          '\b' -> append("\\b")
+          '\u000C' -> append("\\f")
+          else -> append(character)
+        }
+      }
+      append('"')
+    }
+
+plugins {
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.jetbrains.kotlin.android)
+  alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.kotlinx.serialization)
+}
+
+android {
+  namespace = "com.meta.wearable.dat.externalsampleapps.cameraaccess"
+  compileSdk = 36
+
+  buildFeatures { buildConfig = true }
+
+  defaultConfig {
+    applicationId = "com.meta.wearable.dat.externalsampleapps.cameraaccess"
+    minSdk = 31
+    targetSdk = 36
+    versionCode = 1
+    versionName = "1.0"
+
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // Meta Wearables Device Access Toolkit Setup
+    // Without Developer Mode, these values need to be set with credentials from the app registered
+    // in Wearables Developer Center
+    manifestPlaceholders["mwdat_application_id"] = "0"
+    manifestPlaceholders["mwdat_client_token"] = "0"
+    buildConfigField("String", "VOICE_CAPTURE_TRIGGER_PHRASE", "\"사진찍어줘\"")
+  }
+
+  buildTypes {
+    debug {
+      buildConfigField("String", "ANALYSIS_SERVER_URL", analysisServerUrl.asBuildConfigString())
+    }
+    release {
+      buildConfigField("String", "ANALYSIS_SERVER_URL", "\"\"")
+      isMinifyEnabled = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      signingConfig = signingConfigs.getByName("debug")
+    }
+  }
+  compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+  }
+  packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+  signingConfigs {
+    getByName("debug") {
+      storeFile = file("sample.keystore")
+      storePassword = "sample"
+      keyAlias = "sample"
+      keyPassword = "sample"
+    }
+  }
+}
+
+kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }
+
+dependencies {
+  implementation(libs.androidx.activity.compose)
+  implementation(platform(libs.androidx.compose.bom))
+  implementation(libs.androidx.exifinterface)
+  implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
+  implementation(libs.androidx.material.icons.extended)
+  implementation(libs.androidx.material3)
+  implementation(libs.kotlinx.collections.immutable)
+  implementation(libs.kotlinx.serialization.json)
+  implementation(libs.mwdat.core)
+  implementation(libs.mwdat.camera)
+  implementation(libs.mwdat.mockdevice)
+  implementation(libs.okhttp)
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.okhttp.mockwebserver)
+  androidTestImplementation(libs.androidx.ui.test.junit4)
+  androidTestImplementation(libs.androidx.test.uiautomator)
+  androidTestImplementation(libs.androidx.test.rules)
+}
