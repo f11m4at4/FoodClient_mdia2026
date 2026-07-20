@@ -21,9 +21,7 @@ val localProperties =
     }
 
 val analysisServerUrl: String =
-    providers.gradleProperty("analysisServerUrl").orNull
-        ?: localProperties.getProperty("analysis_server_url")
-        ?: ""
+    localProperties.getProperty("ANALYZE_SERVER_URL") ?: ""
 
 fun String.asBuildConfigString(): String =
     buildString {

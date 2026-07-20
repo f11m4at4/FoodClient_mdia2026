@@ -4,7 +4,9 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import okhttp3.Call
@@ -55,46 +57,48 @@ class HttpFoodAnalysisClient(
     logger.uploadStarted()
 
     return try {
-      call.await().use { response ->
-        val elapsedMs = elapsedMillisSince(startedAtNanos)
-        if (!response.isSuccessful) {
-          val error = FoodAnalysisError.HttpStatus(response.code)
-          logger.requestFailed(FoodAnalysisLogStage.Upload, error, response.code, elapsedMs)
-          return@use FoodAnalysisOutcome.Failure(error)
-        }
+      withContext(Dispatchers.IO) {
+        call.await().use { response ->
+          val elapsedMs = elapsedMillisSince(startedAtNanos)
+          if (!response.isSuccessful) {
+            val error = FoodAnalysisError.HttpStatus(response.code)
+            logger.requestFailed(FoodAnalysisLogStage.Upload, error, response.code, elapsedMs)
+            return@use FoodAnalysisOutcome.Failure(error)
+          }
 
-        val responseBody = response.body?.string()
-        if (responseBody.isNullOrBlank()) {
-          logger.requestFailed(
-              FoodAnalysisLogStage.Parse,
-              FoodAnalysisError.InvalidResponse,
-              response.code,
-              elapsedMs,
-          )
-          return@use FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
-        }
+          val responseBody = response.body?.string()
+          if (responseBody.isNullOrBlank()) {
+            logger.requestFailed(
+                FoodAnalysisLogStage.Parse,
+                FoodAnalysisError.InvalidResponse,
+                response.code,
+                elapsedMs,
+            )
+            return@use FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
+          }
 
-        val outcome =
-            try {
-              json.decodeFromString<FoodAnalysisResponseDto>(responseBody).toResult()
-            } catch (_: SerializationException) {
-              FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
-            } catch (_: IllegalArgumentException) {
-              FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
-            }
+          val outcome =
+              try {
+                json.decodeFromString<FoodAnalysisResponseDto>(responseBody).toResult()
+              } catch (_: SerializationException) {
+                FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
+              } catch (_: IllegalArgumentException) {
+                FoodAnalysisOutcome.Failure(FoodAnalysisError.InvalidResponse)
+              }
 
-        when (outcome) {
-          is FoodAnalysisOutcome.Success ->
-              logger.uploadSucceeded(outcome.result.requestId, response.code, elapsedMs)
-          is FoodAnalysisOutcome.Failure ->
-              logger.requestFailed(
-                  FoodAnalysisLogStage.Parse,
-                  outcome.error,
-                  response.code,
-                  elapsedMs,
-              )
+          when (outcome) {
+            is FoodAnalysisOutcome.Success ->
+                logger.uploadSucceeded(outcome.result.requestId, response.code, elapsedMs)
+            is FoodAnalysisOutcome.Failure ->
+                logger.requestFailed(
+                    FoodAnalysisLogStage.Parse,
+                    outcome.error,
+                    response.code,
+                    elapsedMs,
+                )
+          }
+          outcome
         }
-        outcome
       }
     } catch (cancelled: CancellationException) {
       call.cancel()

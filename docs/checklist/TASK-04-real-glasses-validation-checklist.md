@@ -6,6 +6,13 @@
 - [ ] Bluetooth 및 DAT 카메라 권한을 허용했다.
 - [ ] 세션이 `STARTED`, 스트림이 `STREAMING`에 도달했다.
 
+### 실행 기록 (2026-07-20)
+
+- 실제 Android 기기(SM-F966N)가 ADB에 연결된 상태에서 Debug APK를 재설치하고 앱을 실행했다.
+- 앱 프로세스와 `MainActivity`의 전면 표시를 확인했으며, Android `BLUETOOTH_CONNECT`, `CAMERA`, `RECORD_AUDIO` 권한은 허용 상태였다.
+- Meta AI 등록/DAT 카메라 권한 및 실제 안경 세션·스트림 상태는 확인 전이므로 위 항목은 미체크로 유지한다.
+- ADB 연결이 이후 끊겨 실제 안경 수동 시나리오 및 앱 전용 Logcat 수집은 완료하지 못했다.
+
 ## 실제 기기 흐름
 
 - [ ] 음성 명령으로 촬영, 분석, 결과 표시, TTS가 완료된다.
@@ -26,8 +33,7 @@
 ## 성능 및 품질 게이트
 
 - [ ] 촬영부터 TTS 완료까지 단계별 지연 시간을 기록했다.
-- [ ] `.\gradlew.bat test` 통과
-- [ ] `.\gradlew.bat lint` 통과
-- [ ] `.\gradlew.bat assembleDebug` 통과
+- [x] `.\gradlew.bat test` 통과
+- [x] `.\gradlew.bat lint` 통과
+- [x] `.\gradlew.bat assembleDebug` 통과
 - [ ] 실제 기기 수동 테스트 결과를 기록했다.
-

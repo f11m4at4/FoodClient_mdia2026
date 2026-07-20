@@ -44,6 +44,7 @@ import com.meta.wearable.dat.core.session.DeviceSession
 import com.meta.wearable.dat.core.session.DeviceSessionState
 import com.meta.wearable.dat.core.types.DeviceSessionError
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.AppConfig
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.analysis.FoodAnalysisClient
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.analysis.FoodAnalysisError
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.analysis.FoodAnalysisOutcome
@@ -61,6 +62,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,6 +113,9 @@ class StreamViewModel(
   private var speechRestartJob: Job? = null
   private var stream: Stream? = null
   private var previousDeviceSessionState: DeviceSessionState? = null
+  // DAT may report an update-required error immediately before ending the session. Keep this
+  // signal until the next session so the generic terminal error cannot replace update guidance.
+  private var datAppUpdateRequiredForSession = false
   private var hasAudioPermission = false
   private var isScreenForeground = false
   private val captureRequestGate = CaptureRequestGate()
@@ -127,6 +132,7 @@ class StreamViewModel(
     presentationQueue?.stop()
     presentationQueue = null
     previousDeviceSessionState = null
+    datAppUpdateRequiredForSession = false
 
     // Initialize presentation queue - frames are presented based on timestamp, not arrival time
     // Uses IntArray pooling for efficiency - cheaper than Bitmap.copy()
@@ -276,14 +282,24 @@ class StreamViewModel(
 
   private fun handleSessionError(error: DeviceSessionError) {
     Log.e(TAG, "Session error: ${error.description}")
-    val alreadyShowingUpdateRequired =
-        wearablesViewModel.uiState.value.isFirmwareUpdateRequired ||
-            wearablesViewModel.uiState.value.isDatAppUpdateRequired
 
     if (error == DeviceSessionError.DAT_APP_ON_THE_GLASSES_UPDATE_REQUIRED) {
+      datAppUpdateRequiredForSession = true
       wearablesViewModel.setDatAppUpdateRequired(true)
+      wearablesViewModel.setRecentError(
+          getApplication<Application>().getString(R.string.update_required_dat_app_message)
+      )
+      stopStream()
+      wearablesViewModel.navigateToDeviceSelection()
+      return
     }
-    if (alreadyShowingUpdateRequired && error == DeviceSessionError.SESSION_ENDED_BY_DEVICE) {
+
+    if (
+        error == DeviceSessionError.SESSION_ENDED_BY_DEVICE &&
+            (datAppUpdateRequiredForSession ||
+                wearablesViewModel.uiState.value.isDatAppUpdateRequired)
+    ) {
+      Log.i(TAG, "Ignoring generic session-ended error after DAT app update requirement")
       stopStream()
       wearablesViewModel.navigateToDeviceSelection()
       return
@@ -581,7 +597,12 @@ class StreamViewModel(
     Log.d(TAG, "[capture] request started source=${source}")
     analysisJob?.cancel()
     analysisJob =
-        viewModelScope.launch {
+        viewModelScope.launch(
+            CoroutineExceptionHandler { _, exception ->
+              Log.e(TAG, "[analysis] unexpected failure", exception)
+              showAnalysisFailure(FoodAnalysisError.InvalidResponse)
+            }
+        ) {
           var capturedPhotoData: PhotoData? = null
           var captureErrorDescription: String? = null
           activeStream.capturePhoto()

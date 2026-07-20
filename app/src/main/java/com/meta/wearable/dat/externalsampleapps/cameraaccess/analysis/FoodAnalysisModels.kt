@@ -30,6 +30,7 @@ sealed interface FoodAnalysisError {
   data object InvalidResponse : FoodAnalysisError
 
   data object FoodNotDetected : FoodAnalysisError
+
 }
 
 @Serializable
